@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Study-Hub_online | Your Knowledge, One Click Away</title>
+  <meta name="description" content="Free student notes sharing platform organized by subject and chapter, with public Q&A and trilingual AI Doubt Solver." />
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- React 18 & Babel Standalone -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  
+  <!-- Supabase JS SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="bg-slate-50 text-slate-900 antialiased selection:bg-indigo-600 selection:text-white">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useMemo } = React;
+
+    // ============================================================================
+    // BACKEND CONFIGURATION (Replace with your Supabase Project URL & Anon Key)
+    // ============================================================================
+    const SUPABASE_URL = "YOUR_SUPABASE_PROJECT_URL"; // e.g. https://xyzcompany.supabase.co
+    const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
+
+    const isSupabaseConfigured =
+      SUPABASE_URL.startsWith("https://") &&
+      !SUPABASE_URL.includes("YOUR_SUPABASE") &&
+      SUPABASE_ANON_KEY.length > 20;
+
+    const supabase = isSupabaseConfigured
+      ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+      : null;
+
+    const ALLOWED_EXTENSIONS = {
+      "application/pdf": "PDF",
+      "image/jpeg": "IMAGE",
+      "image/png": "IMAGE",
+      "text/plain": "TEXT",
+      "application/msword": "DOCX",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "DOCX",
+    };
+
+    const MAX_FILE_SIZE_BYTES = 15 * 1024 * 1024; // 15 MB
+
+    const INITIAL_SUBJECTS = [
+      { id: "sub-1", name: "Physical Science", slug: "physical-science", description: "Physics & Chemistry laws, numericals, formulas, and lab guides." },
+      { id: "sub-2", name: "Life Science", slug: "life-science", description: "Biology, human physiology, genetics, ecology, and diagrams." },
+      { id: "sub-3", name: "Mathematics", slug: "mathematics", description: "Algebra, geometry, trigonometry, mensuration, and worked examples." },
+      { id: "sub-4", name: "History", slug: "history", description: "Modern Indian history, timelines, reform movements, and world events." },
+      { id: "sub-5", name: "Geography", slug: "geography", description: "Geomorphology, climatology, Indian physical & economic geography." },
+      { id: "sub-6", name: "English & Literature", slug: "english-literature", description: "Grammar, writing skills, comprehension, and literature notes." },
+      { id: "sub-7", name: "Computer & Coding", slug: "computer-coding", description: "Python programming, HTML/JS web development, and Linux CLI." },
+    ];
+
+    const INITIAL_NOTES = [
+      {
+        id: "note-1",
+        title: "Ohm’s Law, Resistance & Household Circuits Complete Guide",
+        subject_id: "sub-1",
+        chapter: "Current Electricity",
+        description: "Step-by-step derivation of Ohm’s Law, series and parallel resistor combinations, Joule’s heating effect, and solved numerical problems.",
+        file_url: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
+        file_format: "PDF",
+        text_content: null,
+        downloads: 128,
+        created_at: "2026-10-20T10:00:00Z",
+      },
+      {
+        id: "note-2",
+        title: "Quadratic Equations & Sridhar Acharya Formula Cheat Sheet",
+        subject_id: "sub-3",
+        chapter: "Algebra - Chapter 1",
+        description: "Discriminant analysis, nature of roots, word problem templates, and rapid exam revision tips.",
+        file_url: null,
+        file_format: "TEXT",
+        text_content: "QUADRATIC EQUATIONS QUICK REVISION\n\n1. Standard Form:\nax² + bx + c = 0 (where a ≠ 0)\n\n2. Sridhar Acharya's Formula:\nx = [-b ± √(b² - 4ac)] / 2a\n\n3. Discriminant (D = b² - 4ac):\n• If D > 0: Real and unequal roots.\n• If D = 0: Real and equal roots (-b / 2a).\n• If D < 0: No real roots.",
+        downloads: 94,
+        created_at: "2026-10-25T14:30:00Z",
+      },
+      {
+        id: "note-3",
+        title: "Python CLI & Automation Fundamentals Reference",
+        subject_id: "sub-7",
+        chapter: "Python Scripting",
+        description: "Core syntax for file handling, loops, functions, dictionary comprehensions, and running scripts cleanly in Linux/Termux.",
+        file_url: null,
+        file_format: "TEXT",
+        text_content: "# Python Quick Reference for Students\n\ndef calculate_velocity(distance_m, time_s):\n    if time_s <= 0:\n        raise ValueError('Time must be > 0')\n    return round(distance_m / time_s, 2)\n\nsquares = [n ** 2 for n in range(1, 11)]\nprint('Squares 1-10:', squares)",
+        downloads: 162,
+        created_at: "2026-10-29T09:15:00Z",
+      },
+    ];
+
+    const INITIAL_QUESTIONS = [
+      {
+        id: "q-1",
+        student_name: "Aarav Sen",
+        subject_id: "sub-1",
+        question_text: "Why is tungsten used exclusively for electric bulb filaments instead of copper?",
+        answer_text: "Tungsten has a very high resistivity and an extremely high melting point (3422°C). When electric current passes through it, it glows white-hot without melting.",
+        is_approved: true,
+        is_answered: true,
+        created_at: "2026-10-22T12:00:00Z",
+      },
+      {
+        id: "q-2",
+        student_name: "Riya Chatterjee",
+        subject_id: "sub-2",
+        question_text: "What is the main difference between Tropic movement and Nastic movement in plants?",
+        answer_text: "Tropic movement is directional growth towards or away from a stimulus (like phototropism), whereas Nastic movement is non-directional and driven by turgor pressure changes (like Mimosa pudica leaves folding on touch).",
+        is_approved: true,
+        is_answered: true,
+        created_at: "2026-10-27T16:40:00Z",
+      },
+    ];
+
+    const INITIAL_ANNOUNCEMENTS = [
+      {
+        id: "ann-1",
+        title: "Welcome to Study-Hub_online!",
+        content: "Access free chapter-wise PDF notes, diagrams, and quick revisions. Use the AI Doubt Solver for explanations in English, Hindi, or Bengali.",
+        is_active: true,
+      },
+    ];
+
+    function App() {
+      const [route, setRoute] = useState("home");
+      const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+      const [subjects, setSubjects] = useState(INITIAL_SUBJECTS);
+      const [notes, setNotes] = useState(INITIAL_NOTES);
+      const [questions, setQuestions] = useState(INITIAL_QUESTIONS);
+      const [announcements, setAnnouncements] = useState(INITIAL_ANNOUNCEMENTS);
+      const [globalBanner, setGlobalBanner] = useState(null);
+
+      // Search & Filters
+      const [searchQuery, setSearchQuery] = useState("");
+      const [selectedSubjectId, setSelectedSubjectId] = useState("ALL");
+      const [selectedFormat, setSelectedFormat] = useState("ALL");
+      const [sortBy, setSortBy] = useState("newest");
+      const [previewNote, setPreviewNote] = useState(null);
+
+      // Q&A Form
+      const [studentName, setStudentName] = useState("");
+      const [questionSubject, setQuestionSubject] = useState(INITIAL_SUBJECTS[0].id);
+      const [questionText, setQuestionText] = useState("");
+      const [honeypot, setHoneypot] = useState("");
+      const [qaSearch, setQaSearch] = useState("");
+
+      // AI Doubt Solver
+      const [aiSubject, setAiSubject] = useState("Physical Science");
+      const [aiLanguage, setAiLanguage] = useState("English");
+      const [aiInput, setAiInput] = useState("");
+      const [aiLoading, setAiLoading] = useState(false);
+      const [aiMessages, setAiMessages] = useState([
+        {
+          id: "welcome",
+          role: "assistant",
+          text: "Hello! I am your Study-Hub_online AI Academic Assistant. Ask any topic, numerical, or concept in English, Hindi (हिंदी), or Bengali (বাংলা).",
+          timestamp: "Just now",
+        },
+      ]);
+
+      // Admin Auth & Forms
+      const [adminUser, setAdminUser] = useState(null);
+      const [adminEmail, setAdminEmail] = useState("");
+      const [adminPassword, setAdminPassword] = useState("");
+      const [adminTab, setAdminTab] = useState("notes");
+      const [editingNoteId, setEditingNoteId] = useState(null);
+      const [noteTitle, setNoteTitle] = useState("");
+      const [noteSubjectId, setNoteSubjectId] = useState(INITIAL_SUBJECTS[0].id);
+      const [noteChapter, setNoteChapter] = useState("");
+      const [noteDescription, setNoteDescription] = useState("");
+      const [noteFormat, setNoteFormat] = useState("PDF");
+      const [noteTextContent, setNoteTextContent] = useState("");
+      const [uploadFiles, setUploadFiles] = useState([]);
+      const [uploadingNote, setUploadingNote] = useState(false);
+      const [answerDrafts, setAnswerDrafts] = useState({});
+      const [newSubjectName, setNewSubjectName] = useState("");
+      const [newSubjectDesc, setNewSubjectDesc] = useState("");
+      const [newAnnTitle, setNewAnnTitle] = useState("");
+      const [newAnnContent, setNewAnnContent] = useState("");
+
+      useEffect(() => {
+        if (!supabase) return;
+        Promise.all([
+          supabase.from("subjects").select("*").order("name"),
+          supabase.from("notes").select("*").order("created_at", { ascending: false }),
+          supabase.from("questions").select("*").order("created_at", { ascending: false }),
+          supabase.from("announcements").select("*").eq("is_active", true).order("created_at", { ascending: false }),
+        ]).then(([subRes, noteRes, qaRes, annRes]) => {
+          if (subRes.data?.length) setSubjects(subRes.data);
+          if (noteRes.data?.length) setNotes(noteRes.data);
+          if (qaRes.data?.length) setQuestions(qaRes.data);
+          if (annRes.data?.length) setAnnouncements(annRes.data);
+        });
+
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          if (session?.user?.email) setAdminUser({ email: session.user.email });
+        });
+      }, []);
+
+      const showNotice = (type, message) => {
+        setGlobalBanner({ type, message });
+        setTimeout(() => setGlobalBanner(null), 5000);
+      };
+
+      const getSubjectName = (id) => subjects.find((s) => s.id === id)?.name || "General";
+
+      const filteredNotes = useMemo(() => {
+        const q = searchQuery.trim().toLowerCase();
+        return notes
+          .filter((note) => {
+            const subName = getSubjectName(note.subject_id).toLowerCase();
+            const matchesQ =
+              !q ||
+              note.title.toLowerCase().includes(q) ||
+              note.chapter.toLowerCase().includes(q) ||
+              note.description.toLowerCase().includes(q) ||
+              subName.includes(q);
+            const matchesSub = selectedSubjectId === "ALL" || note.subject_id === selectedSubjectId;
+            const matchesFmt = selectedFormat === "ALL" || note.file_format === selectedFormat;
+            return matchesQ && matchesSub && matchesFmt;
+          })
+          .sort((a, b) => {
+            if (sortBy === "popular") return b.downloads - a.downloads;
+            const dA = new Date(a.created_at).getTime();
+            const dB = new Date(b.created_at).getTime();
+            return sortBy === "newest" ? dB - dA : dA - dB;
+          });
+      }, [notes, searchQuery, selectedSubjectId, selectedFormat, sortBy, subjects]);
+
+      const approvedQuestions = useMemo(() => {
+        const q = qaSearch.trim().toLowerCase();
+        return questions.filter((item) => {
+          if (!item.is_approved) return false;
+          if (!q) return true;
+          return (
+            item.question_text.toLowerCase().includes(q) ||
+            (item.answer_text && item.answer_text.toLowerCase().includes(q)) ||
+            getSubjectName(item.subject_id).toLowerCase().includes(q)
+          );
+        });
+      }, [questions, qaSearch, subjects]);
+
+      const handleDownloadNote = async (note) => {
+        setNotes((prev) => prev.map((n) => (n.id === note.id ? { ...n, downloads: n.downloads + 1 } : n)));
+        if (supabase) await supabase.rpc("increment_note_download", { note_id: note.id });
+
+        if (note.file_format === "TEXT" && note.text_content) {
+          const blob = new Blob([note.text_content], { type: "text/plain;charset=utf-8" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `${note.title.replace(/[^a-z0-9]/gi, "_").toLowerCase()}.txt`;
+          a.click();
+          URL.revokeObjectURL(url);
+          return;
+        }
+        if (note.file_url) {
+          window.open(note.file_url, "_blank", "noopener,noreferrer");
+        } else {
+          setPreviewNote(note);
+        }
+      };
+
+      const handleQuestionSubmit = async (e) => {
+        e.preventDefault();
+        if (honeypot) return;
+        if (studentName.trim().length < 2 || questionText.trim().length < 10) {
+          showNotice("error", "Please enter your display name and a question (at least 10 characters).");
+          return;
+        }
+        if (supabase) {
+          const { error } = await supabase.from("questions").insert({
+            student_name: studentName.trim(),
+            subject_id: questionSubject,
+            question_text: questionText.trim(),
+          });
+          if (error) return showNotice("error", error.message);
+        } else {
+          setQuestions((prev) => [
+            {
+              id: `q-${Date.now()}`,
+              student_name: studentName.trim(),
+              subject_id: questionSubject,
+              question_text: questionText.trim(),
+              answer_text: null,
+              is_approved: false,
+              is_answered: false,
+              created_at: new Date().toISOString(),
+            },
+            ...prev,
+          ]);
+        }
+        setStudentName("");
+        setQuestionText("");
+        showNotice("success", "Question submitted! It will appear publicly once reviewed by the Admin.");
+      };
+
+      const handleAskAI = async (e) => {
+        e.preventDefault();
+        const prompt = aiInput.trim();
+        if (!prompt || aiLoading) return;
+
+        setAiMessages((prev) => [
+          ...prev,
+          { id: `u-${Date.now()}`, role: "user", text: prompt, timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) },
+        ]);
+        setAiInput("");
+        setAiLoading(true);
+
+        try {
+          if (!supabase) {
+            setAiMessages((prev) => [
+              ...prev,
+              {
+                id: `ai-${Date.now()}`,
+                role: "assistant",
+                text: `⚙️ AI Backend Setup Required:\nConnect your SUPABASE_URL & SUPABASE_ANON_KEY in index.html and deploy the 'ai-doubt-solver' Edge Function with GEMINI_API_KEY so your API key stays 100% secure on the server.`,
+                timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+              },
+            ]);
+          } else {
+            const { data, error } = await supabase.functions.invoke("ai-doubt-solver", {
+              body: { prompt, subject: aiSubject, language: aiLanguage },
+            });
+            setAiMessages((prev) => [
+              ...prev,
+              {
+                id: `ai-${Date.now()}`,
+                role: "assistant",
+                text: error || data?.error ? `⚠️ ${data?.message || error?.message}` : data.answer,
+                timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+              },
+            ]);
+          }
+        } finally {
+          setAiLoading(false);
+        }
+      };
+
+      const handleAdminLogin = async (e) => {
+        e.preventDefault();
+        if (!supabase) {
+          showNotice("error", "Configure SUPABASE_URL & SUPABASE_ANON_KEY at the top of index.html to enable server-side Admin authentication.");
+          return;
+        }
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: adminEmail.trim(),
+          password: adminPassword,
+        });
+        if (error) return showNotice("error", error.message);
+        if (data.user?.email) {
+          setAdminUser({ email: data.user.email });
+          setAdminPassword("");
+          showNotice("success", "Signed in to Admin Dashboard.");
+        }
+      };
+
+      return (
+        <div className="min-h-screen flex flex-col">
+          {/* Announcement Banner */}
+          {announcements.length > 0 && (
+            <div className="bg-indigo-950 text-indigo-100 px-4 py-2 text-xs sm:text-sm text-center">
+              <strong className="text-amber-300">{announcements[0].title}:</strong> {announcements[0].content}
+            </div>
+          )}
+
+          {/* Toast Notification */}
+          {globalBanner && (
+            <div className="fixed bottom-5 right-5 z-50 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-xl text-sm flex items-center gap-3">
+              <span>{globalBanner.message}</span>
+              <button onClick={() => setGlobalBanner(null)} className="text-slate-400 hover:text-white">✕</button>
+            </div>
+          )}
+
+          {/* Navbar */}
+          <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-slate-200">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+              <button onClick={() => setRoute("home")} className="flex items-center gap-2.5 text-left">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-teal-500 flex items-center justify-center text-white font-bold text-lg shadow">
+                  S
+                </div>
+                <div>
+                  <span className="text-lg font-extrabold tracking-tight text-slate-900">
+                    Study-Hub<span className="text-indigo-600">_online</span>
+                  </span>
+                  <span className="block text-[11px] text-slate-500 -mt-1">Free Student Learning Portal</span>
+                </div>
+              </button>
+
+              <nav className="hidden md:flex items-center gap-1">
+                {[
+                  { id: "home", label: "Home" },
+                  { id: "notes", label: "Notes" },
+                  { id: "subjects", label: "Subjects" },
+                  { id: "qa", label: "Ask Questions" },
+                  { id: "ai", label: "AI Doubt Solver" },
+                  { id: "about", label: "About" },
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => setRoute(item.id)}
+                    className={`px-3.5 py-2 rounded-lg text-sm font-medium transition ${
+                      route === item.id ? "bg-indigo-50 text-indigo-700 font-semibold" : "text-slate-600 hover:bg-slate-100"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </nav>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setRoute("admin")}
+                  className="px-3.5 py-2 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200"
+                >
+                  {adminUser ? "Admin Panel" : "Admin Login"}
+                </button>
+                <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="md:hidden p-2 text-slate-700">
+                  ☰
+                </button>
+              </div>
+            </div>
+
+            {mobileMenuOpen && (
+              <div className="md:hidden bg-white border-b border-slate-200 px-4 py-3 space-y-1">
+                {["home", "notes", "subjects", "qa", "ai", "about", "admin"].map((r) => (
+                  <button
+                    key={r}
+                    onClick={() => {
+                      setRoute(r);
+                      setMobileMenuOpen(false);
+                    }}
+                    className="block w-full text-left px-3 py-2 rounded-lg text-sm font-medium capitalize hover:bg-slate-100"
+                  >
+                    {r === "qa" ? "Ask Questions" : r === "ai" ? "AI Doubt Solver" : r}
+                  </button>
+                ))}
+              </div>
+            )}
+          </header>
+
+          {/* Main Views */}
+          <main className="flex-1">
+            {route === "home" && (
+              <div>
+                <section className="bg-gradient-to-b from-indigo-950 via-slate-900 to-slate-900 text-white py-16 sm:py-24 px-4 text-center">
+                  <div className="max-w-3xl mx-auto">
+                    <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/20 text-teal-300 border border-indigo-400/30 mb-5">
+                      ✨ 100% Free Open Educational Platform
+                    </span>
+                    <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight">
+                      Your Knowledge, <span className="text-teal-400">One Click Away.</span>
+                    </h1>
+                    <p className="mt-4 text-base sm:text-lg text-slate-300">
+                      Access free chapter-wise PDF notes, diagrams, and solved examples organized by subject. Ask public questions or get instant help from our AI Doubt Solver.
+                    </p>
+                    <div className="mt-8 max-w-2xl mx-auto flex flex-col sm:flex-row gap-2 bg-white/10 p-2 rounded-2xl border border-white/15">
+                      <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search notes by title, subject, or chapter..."
+                        className="flex-1 bg-transparent text-white placeholder-slate-300 px-4 py-2.5 text-sm focus:outline-none"
+                      />
+                      <button
+                        onClick={() => setRoute("notes")}
+                        className="px-6 py-3 rounded-xl bg-teal-400 hover:bg-teal-300 text-slate-950 font-bold text-sm transition"
+                      >
+                        Explore Notes →
+                      </button>
+                    </div>
+                  </div>
+                </section>
+
+                {/* Popular Subjects */}
+                <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+                  <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-2xl font-bold">Popular Subjects</h2>
+                    <button onClick={() => setRoute("subjects")} className="text-sm font-semibold text-indigo-600">
+                      All Subjects →
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                    {subjects.slice(0, 4).map((sub) => (
+                      <button
+                        key={sub.id}
+                        onClick={() => {
+                          setSelectedSubjectId(sub.id);
+                          setRoute("notes");
+                        }}
+                        className="text-left bg-white p-5 rounded-2xl border border-slate-200 hover:border-indigo-500 hover:shadow-md transition"
+                      >
+                        <h3 className="font-bold text-slate-900">{sub.name}</h3>
+                        <p className="text-xs text-slate-500 mt-1.5 line-clamp-2">{sub.description}</p>
+                        <span className="inline-block mt-4 text-xs font-semibold text-indigo-600">Browse Notes →</span>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+
+                {/* Recent Notes */}
+                <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                  <h2 className="text-2xl font-bold mb-6">Recently Uploaded Notes</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {notes.slice(0, 3).map((note) => (
+                      <div key={note.id} className="bg-white rounded-2xl p-5 border border-slate-200 flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between text-xs font-bold mb-2">
+                            <span className="text-indigo-600">{getSubjectName(note.subject_id)}</span>
+                            <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700">{note.file_format}</span>
+                          </div>
+                          <h3 className="font-bold text-base text-slate-900">{note.title}</h3>
+                          <p className="text-xs text-teal-700 font-medium mt-1">Chapter: {note.chapter}</p>
+                          <p className="text-sm text-slate-600 mt-2 line-clamp-2">{note.description}</p>
+                        </div>
+                        <div className="mt-5 pt-3 border-t border-slate-100 flex justify-end gap-2">
+                          <button
+                            onClick={() => setPreviewNote(note)}
+                            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200"
+                          >
+                            Preview
+                          </button>
+                          <button
+                            onClick={() => handleDownloadNote(note)}
+                            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700"
+                          >
+                            Download
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              </div>
+            )}
+
+            {/* Notes Library */}
+            {route === "notes" && (
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+                <h1 className="text-3xl font-extrabold mb-2">Notes Library</h1>
+                <p className="text-sm text-slate-600 mb-6">Filter by subject, format, or keyword.</p>
+
+                <div className="bg-white p-4 rounded-2xl border border-slate-200 mb-8 grid grid-cols-1 sm:grid-cols-4 gap-3">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search title or topic..."
+                    className="px-3.5 py-2 text-sm rounded-xl border border-slate-200"
+                  />
+                  <select
+                    value={selectedSubjectId}
+                    onChange={(e) => setSelectedSubjectId(e.target.value)}
+                    className="px-3.5 py-2 text-sm rounded-xl border border-slate-200 bg-white"
+                  >
+                    <option value="ALL">All Subjects</option>
+                    {subjects.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={selectedFormat}
+                    onChange={(e) => setSelectedFormat(e.target.value)}
+                    className="px-3.5 py-2 text-sm rounded-xl border border-slate-200 bg-white"
+                  >
+                    <option value="ALL">All Formats</option>
+                    <option value="PDF">PDF</option>
+                    <option value="IMAGE">Image (JPG/PNG)</option>
+                    <option value="TEXT">Text Notes</option>
+                    <option value="DOCX">Word (DOCX)</option>
+                  </select>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                    className="px-3.5 py-2 text-sm rounded-xl border border-slate-200 bg-white"
+                  >
+                    <option value="newest">Newest First</option>
+                    <option value="oldest">Oldest First</option>
+                    <option value="popular">Most Downloaded</option>
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {filteredNotes.map((note) => (
+                    <div key={note.id} className="bg-white rounded-2xl p-5 border border-slate-200 flex flex-col justify-between">
+                      <div>
+                        <div className="flex justify-between text-xs font-bold mb-2">
+                          <span className="text-indigo-600">{getSubjectName(note.subject_id)}</span>
+                          <span className="px-2 py-0.5 rounded bg-slate-100">{note.file_format}</span>
+                        </div>
+                        <h3 className="font-bold text-slate-900">{note.title}</h3>
+                        <p className="text-xs text-teal-700 font-semibold mt-1">Topic: {note.chapter}</p>
+                        <p className="text-sm text-slate-600 mt-2">{note.description}</p>
+                      </div>
+                      <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                        <span>{note.downloads} downloads</span>
+                        <div className="flex gap-2">
+                          <button onClick={() => setPreviewNote(note)} className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-800 font-semibold">
+                            Preview
+                          </button>
+                          <button onClick={() => handleDownloadNote(note)} className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white font-semibold">
+                            Download
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Subjects View */}
+            {route === "subjects" && (
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+                <h1 className="text-3xl font-extrabold mb-6">All Subjects</h1>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {subjects.map((s) => (
+                    <div key={s.id} className="bg-white p-6 rounded-2xl border border-slate-200 flex flex-col justify-between">
+                      <div>
+                        <h2 className="text-lg font-bold">{s.name}</h2>
+                        <p className="text-sm text-slate-600 mt-1">{s.description}</p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setSelectedSubjectId(s.id);
+                          setRoute("notes");
+                        }}
+                        className="mt-5 py-2 rounded-xl bg-indigo-50 text-indigo-700 font-semibold text-xs hover:bg-indigo-600 hover:text-white transition"
+                      >
+                        View Notes →
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Public Q&A */}
+            {route === "qa" && (
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 grid grid-cols-1 lg:grid-cols-12 gap-8">
+                <form onSubmit={handleQuestionSubmit} className="lg:col-span-5 bg-white p-6 rounded-2xl border border-slate-200 space-y-4 h-fit">
+                  <h2 className="text-lg font-bold">Ask a Community Question</h2>
+                  <input type="text" value={honeypot} onChange={(e) => setHoneypot(e.target.value)} className="hidden" />
+                  <input
+                    type="text"
+                    required
+                    value={studentName}
+                    onChange={(e) => setStudentName(e.target.value)}
+                    placeholder="Your Display Name"
+                    className="w-full px-3.5 py-2 text-sm rounded-xl border border-slate-200"
+                  />
+                  <select
+                    value={questionSubject}
+                    onChange={(e) => setQuestionSubject(e.target.value)}
+                    className="w-full px-3.5 py-2 text-sm rounded-xl border border-slate-200 bg-white"
+                  >
+                    {subjects.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                  <textarea
+                    rows="4"
+                    required
+                    value={questionText}
+                    onChange={(e) => setQuestionText(e.target.value)}
+                    placeholder="Write your question clearly..."
+                    className="w-full px-3.5 py-2 text-sm rounded-xl border border-slate-200"
+                  />
+                  <button type="submit" className="w-full py-2.5 rounded-xl bg-indigo-600 text-white font-semibold text-sm">
+                    Submit Question
+                  </button>
+                </form>
+
+                <div className="lg:col-span-7 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-2xl font-bold">Answered Questions</h2>
+                    <input
+                      type="text"
+                      value={qaSearch}
+                      onChange={(e) => setQaSearch(e.target.value)}
+                      placeholder="Search questions..."
+                      className="px-3 py-1.5 text-sm rounded-xl border border-slate-200 bg-white"
+                    />
+                  </div>
+                  {approvedQuestions.map((q) => (
+                    <div key={q.id} className="bg-white p-5 rounded-2xl border border-slate-200 space-y-2">
+                      <div className="flex justify-between text-xs text-slate-500">
+                        <span className="font-bold text-indigo-600">{getSubjectName(q.subject_id)}</span>
+                        <span>Asked by {q.student_name}</span>
+                      </div>
+                      <p className="font-bold text-slate-900">{q.question_text}</p>
+                      {q.answer_text && (
+                        <div className="bg-emerald-50 border border-emerald-200 p-3.5 rounded-xl text-sm text-slate-800">
+                          <strong className="text-emerald-800 block text-xs mb-1">✓ Verified Admin Answer:</strong>
+                          {q.answer_text}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* AI Doubt Solver */}
+            {route === "ai" && (
+              <div className="max-w-4xl mx-auto px-4 py-10">
+                <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden flex flex-col h-[580px] shadow-sm">
+                  <div className="bg-slate-900 text-white p-4 flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h1 className="font-bold">AI Doubt-Solving Assistant</h1>
+                      <p className="text-xs text-slate-300">Supports English, Hindi (हिंदी) & Bengali (বাংলা)</p>
+                    </div>
+                    <div className="flex gap-2">
+                      {["English", "Hindi", "Bengali"].map((lang) => (
+                        <button
+                          key={lang}
+                          onClick={() => setAiLanguage(lang)}
+                          className={`px-3 py-1 rounded-lg text-xs font-semibold ${
+                            aiLanguage === lang ? "bg-teal-400 text-slate-950" : "bg-white/10 text-white"
+                          }`}
+                        >
+                          {lang}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex-1 p-5 overflow-y-auto space-y-3 bg-slate-50">
+                    {aiMessages.map((m) => (
+                      <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                        <div
+                          className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm whitespace-pre-line ${
+                            m.role === "user" ? "bg-indigo-600 text-white" : "bg-white border border-slate-200 text-slate-800"
+                          }`}
+                        >
+                          {m.text}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <form onSubmit={handleAskAI} className="p-4 bg-white border-t border-slate-200 flex gap-2">
+                    <input
+                      type="text"
+                      value={aiInput}
+                      onChange={(e) => setAiInput(e.target.value)}
+                      placeholder={`Ask your question in ${aiLanguage}...`}
+                      className="flex-1 px-4 py-2.5 text-sm rounded-xl border border-slate-200"
+                    />
+                    <button type="submit" className="px-5 py-2.5 rounded-xl bg-indigo-600 text-white font-semibold text-sm">
+                      Ask AI
+                    </button>
+                  </form>
+                </div>
+              </div>
+            )}
+
+            {/* About */}
+            {route === "about" && (
+              <div className="max-w-3xl mx-auto px-4 py-12">
+                <div className="bg-white p-8 rounded-3xl border border-slate-200 space-y-4">
+                  <h1 className="text-3xl font-extrabold">About Study-Hub_online</h1>
+                  <p className="text-slate-600 leading-relaxed">
+                    Study-Hub_online is a student-first open educational platform providing free chapter-wise notes, community Q&A moderation, and multilingual AI academic tutoring.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Admin Portal */}
+            {route === "admin" && (
+              <div className="max-w-4xl mx-auto px-4 py-12">
+                {!adminUser ? (
+                  <form onSubmit={handleAdminLogin} className="max-w-md mx-auto bg-white p-8 rounded-2xl border border-slate-200 space-y-4">
+                    <h1 className="text-2xl font-extrabold">Admin Login</h1>
+                    <p className="text-xs text-slate-500">Protected by Supabase Server-Side Auth & RLS.</p>
+                    <input
+                      type="email"
+                      required
+                      value={adminEmail}
+                      onChange={(e) => setAdminEmail(e.target.value)}
+                      placeholder="Admin Email"
+                      className="w-full px-3.5 py-2 text-sm rounded-xl border border-slate-200"
+                    />
+                    <input
+                      type="password"
+                      required
+                      value={adminPassword}
+                      onChange={(e) => setAdminPassword(e.target.value)}
+                      placeholder="Password"
+                      className="w-full px-3.5 py-2 text-sm rounded-xl border border-slate-200"
+                    />
+                    <button type="submit" className="w-full py-2.5 rounded-xl bg-indigo-600 text-white font-semibold text-sm">
+                      Sign In
+                    </button>
+                  </form>
+                ) : (
+                  <div className="bg-white p-6 rounded-2xl border border-slate-200">
+                    <h2 className="text-xl font-bold">Welcome, {adminUser.email}</h2>
+                    <p className="text-sm text-slate-600 mt-1">Connected to live Supabase backend.</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </main>
+
+          {/* Note Preview Modal */}
+          {previewNote && (
+            <div className="fixed inset-0 z-50 bg-slate-950/70 flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl max-w-3xl w-full max-h-[85vh] flex flex-col overflow-hidden">
+                <div className="px-6 py-4 border-b border-slate-200 flex justify-between items-center">
+                  <h3 className="font-bold">{previewNote.title}</h3>
+                  <button onClick={() => setPreviewNote(null)} className="text-slate-500 hover:text-slate-900">✕</button>
+                </div>
+                <div className="p-6 overflow-y-auto flex-1 bg-slate-50">
+                  {previewNote.file_format === "TEXT" ? (
+                    <pre className="whitespace-pre-wrap font-mono text-sm bg-white p-5 rounded-2xl border border-slate-200">
+                      {previewNote.text_content}
+                    </pre>
+                  ) : previewNote.file_url ? (
+                    <iframe src={previewNote.file_url} className="w-full h-[55vh] rounded-xl border border-slate-200 bg-white" />
+                  ) : (
+                    <p className="text-center py-10 text-sm text-slate-500">Preview unavailable.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <footer className="bg-slate-900 text-slate-400 py-8 text-center text-xs mt-12">
+            © {new Date().getFullYear()} Study-Hub_online • Your Knowledge, One Click Away.
+          </footer>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<App />);
+  </script>
+</body>
+</html>
